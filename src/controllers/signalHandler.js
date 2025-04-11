@@ -11,23 +11,62 @@ const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 // 活跃交易文件路径
 const tradesFilePath = path.join(__dirname, '../../data/active_trades.json');
+// 设置文件路径
+const settingsFilePath = path.join(__dirname, '../../data/settings.json');
 
 /**
- * 检查是否已有相同币种的活跃交易
- * @param {string} symbol - 交易对
- * @returns {object|null} - 返回交易对象或null
+ * 获取当前交易设置
+ * @returns {object} - 返回交易设置
  */
-function getActiveTradeForSymbol(symbol) {
+function getTradeSettings() {
   try {
-    // 读取活跃交易
+    const settingsData = fs.readFileSync(settingsFilePath, 'utf8');
+    return JSON.parse(settingsData);
+  } catch (error) {
+    console.error('读取设置失败，使用默认设置:', error);
+    return {
+      amount: config.trading.defaultAmount,
+      leverage: config.trading.defaultLeverage,
+      takeProfitPercentage: config.trading.defaultTakeProfitPercentage,
+      stopLossPercentage: config.trading.defaultStopLossPercentage,
+      tradeMode: config.trading.defaultTradeMode
+    };
+  }
+}
+
+/**
+ * 检查是否允许开仓
+ * @param {string} symbol - 交易对
+ * @param {string} side - 交易方向
+ * @returns {boolean} - 是否允许开仓
+ */
+function checkTradeAllowed(symbol, side) {
+  try {
+    const settings = getTradeSettings();
     const tradesData = fs.readFileSync(tradesFilePath, 'utf8');
     const trades = JSON.parse(tradesData);
     
-    // 查找对应币种的交易
-    return trades.find(trade => trade.symbol === symbol) || null;
+    // 检查是否已有相同币种的仓位
+    const existingTrade = trades.find(trade => trade.symbol === symbol);
+    if (existingTrade) {
+      console.log('已存在相同币种的仓位:', existingTrade);
+      return false;
+    }
+    
+    // 检查交易模式限制
+    if (settings.tradeMode === 'long-only' && side === 'SELL') {
+      console.log('当前为只做多模式，不允许做空');
+      return false;
+    }
+    if (settings.tradeMode === 'short-only' && side === 'BUY') {
+      console.log('当前为只做空模式，不允许做多');
+      return false;
+    }
+    
+    return true;
   } catch (error) {
-    console.error('检查活跃交易失败:', error);
-    return null;
+    console.error('检查交易许可失败:', error);
+    return false;
   }
 }
 
@@ -40,188 +79,61 @@ async function handleSignal(req, res) {
   try {
     const { COINNAME, SIDE } = req.body;
     
-    // 参数验证
     if (!COINNAME || !SIDE) {
+      return res.status(400).json({ success: false, message: '缺少必要参数' });
+    }
+    
+    // 获取当前设置
+    const settings = getTradeSettings();
+    console.log('\n收到交易信号:');
+    console.log('------------------------');
+    console.log('交易对:', COINNAME);
+    console.log('方向:', SIDE);
+    console.log('交易金额:', settings.amount, 'USDT');
+    console.log('杠杆倍数:', settings.leverage, 'x');
+    console.log('实际交易金额:', settings.amount * settings.leverage, 'USDT');
+    console.log('止盈比例:', settings.takeProfitPercentage, '%');
+    console.log('止损比例:', settings.stopLossPercentage, '%');
+    console.log('------------------------\n');
+    
+    // 检查是否允许交易
+    if (!checkTradeAllowed(COINNAME, SIDE)) {
       return res.status(400).json({ 
         success: false, 
-        message: '缺少必要参数，需要COINNAME和SIDE字段' 
+        message: '不允许开仓，可能是因为已有相同币种的仓位或违反交易模式限制' 
       });
     }
     
-    if (SIDE !== 'BUY' && SIDE !== 'SELL') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'SIDE参数必须为BUY或SELL' 
-      });
-    }
-    
-    // 将交易对符号统一转为大写
-    const normalizedCoinName = COINNAME.toUpperCase();
-    
-    // 格式化完整的交易对符号（添加_UMCBL后缀）
-    const fullSymbol = normalizedCoinName.includes('_UMCBL') ? normalizedCoinName : `${normalizedCoinName}_UMCBL`;
-    
-    // 获取当前该币种的活跃交易
-    const activeTrade = getActiveTradeForSymbol(fullSymbol);
-    
-    let actionTaken = '';
-    let result = null;
-    
-    // 根据信号和当前持仓状态决定操作
+    // 根据信号执行交易
+    let result;
     if (SIDE === 'BUY') {
-      if (!activeTrade) {
-        // 无仓位，开多
-        console.log(`收到买入信号，${fullSymbol} 无仓位，执行开多操作`);
-        
-        // 模拟请求对象
-        const openLongReq = {
-          body: {
-            symbol: normalizedCoinName,
-            amount: config.trading.defaultAmount,
-            takeProfitPercentage: config.trading.defaultTakeProfitPercentage,
-            stopLossPercentage: config.trading.defaultStopLossPercentage
-          }
-        };
-        
-        // 模拟响应对象
-        const openLongRes = {
-          status: function(code) {
-            this.statusCode = code;
-            return this;
-          },
-          json: function(data) {
-            this.data = data;
-            return this;
-          }
-        };
-        
-        // 执行开多
-        await longPosition.openLong(openLongReq, openLongRes);
-        
-        result = openLongRes.data;
-        actionTaken = '开多';
-      } else if (activeTrade.type === 'short') {
-        // 有空仓，平空
-        console.log(`收到买入信号，${fullSymbol} 有空仓，执行平仓操作`);
-        
-        // 模拟请求对象
-        const closeReq = {
-          body: {
-            symbol: normalizedCoinName
-          }
-        };
-        
-        // 模拟响应对象
-        const closeRes = {
-          status: function(code) {
-            this.statusCode = code;
-            return this;
-          },
-          json: function(data) {
-            this.data = data;
-            return this;
-          }
-        };
-        
-        // 执行平仓
-        await closePosition.closePosition(closeReq, closeRes);
-        
-        result = closeRes.data;
-        actionTaken = '平空';
-      } else {
-        // 已有多仓，不操作
-        return res.json({
-          success: false,
-          message: `已持有 ${normalizedCoinName} 多仓，忽略买入信号`,
-          data: { activeTrade }
-        });
-      }
+      result = await longPosition.openLong({
+        body: {
+          symbol: COINNAME,
+          amount: settings.amount,
+          leverage: settings.leverage,
+          takeProfitPercentage: settings.takeProfitPercentage,
+          stopLossPercentage: settings.stopLossPercentage
+        }
+      });
     } else if (SIDE === 'SELL') {
-      if (!activeTrade) {
-        // 无仓位，开空
-        console.log(`收到卖出信号，${fullSymbol} 无仓位，执行开空操作`);
-        
-        // 模拟请求对象
-        const openShortReq = {
-          body: {
-            symbol: normalizedCoinName,
-            amount: config.trading.defaultAmount,
-            takeProfitPercentage: config.trading.defaultTakeProfitPercentage,
-            stopLossPercentage: config.trading.defaultStopLossPercentage
-          }
-        };
-        
-        // 模拟响应对象
-        const openShortRes = {
-          status: function(code) {
-            this.statusCode = code;
-            return this;
-          },
-          json: function(data) {
-            this.data = data;
-            return this;
-          }
-        };
-        
-        // 执行开空
-        await shortPosition.openShort(openShortReq, openShortRes);
-        
-        result = openShortRes.data;
-        actionTaken = '开空';
-      } else if (activeTrade.type === 'long') {
-        // 有多仓，平多
-        console.log(`收到卖出信号，${fullSymbol} 有多仓，执行平仓操作`);
-        
-        // 模拟请求对象
-        const closeReq = {
-          body: {
-            symbol: normalizedCoinName
-          }
-        };
-        
-        // 模拟响应对象
-        const closeRes = {
-          status: function(code) {
-            this.statusCode = code;
-            return this;
-          },
-          json: function(data) {
-            this.data = data;
-            return this;
-          }
-        };
-        
-        // 执行平仓
-        await closePosition.closePosition(closeReq, closeRes);
-        
-        result = closeRes.data;
-        actionTaken = '平多';
-      } else {
-        // 已有空仓，不操作
-        return res.json({
-          success: false,
-          message: `已持有 ${normalizedCoinName} 空仓，忽略卖出信号`,
-          data: { activeTrade }
-        });
-      }
+      result = await shortPosition.openShort({
+        body: {
+          symbol: COINNAME,
+          amount: settings.amount,
+          leverage: settings.leverage,
+          takeProfitPercentage: settings.takeProfitPercentage,
+          stopLossPercentage: settings.stopLossPercentage
+        }
+      });
+    } else {
+      return res.status(400).json({ success: false, message: '无效的交易方向' });
     }
     
-    // 返回操作结果
-    return res.json({
-      success: true,
-      message: `信号处理成功，执行操作: ${actionTaken} ${normalizedCoinName}`,
-      signal: { COINNAME: normalizedCoinName, SIDE },
-      action: actionTaken,
-      result: result
-    });
-    
+    res.json(result);
   } catch (error) {
-    console.error('信号处理失败:', error);
-    return res.status(500).json({
-      success: false,
-      message: '信号处理失败',
-      error: error.message
-    });
+    console.error('处理交易信号失败:', error);
+    res.status(500).json({ success: false, message: '处理交易信号失败', error: error.message });
   }
 }
 

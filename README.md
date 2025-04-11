@@ -16,6 +16,7 @@
 - **交易模式选择**：支持多空都做、只做多或只做空模式
 - **活跃交易管理**：直观展示当前持仓，支持一键平仓
 - **自动精度调整**：针对不同币种的价格精度进行自动适配
+- **杠杆交易支持**：支持设置杠杆倍数，自动计算实际交易金额
 
 ## 技术栈
 
@@ -63,10 +64,10 @@ cp docs/config.example.json config.json
     "testMode": true
   },
   "trading": {
-    "defaultAmount": 10,
-    "defaultLeverage": 20,
-    "defaultTakeProfitPercentage": 3,
-    "defaultStopLossPercentage": 3,
+    "defaultAmount": 40,
+    "defaultLeverage": 25,
+    "defaultTakeProfitPercentage": 5,
+    "defaultStopLossPercentage": 5,
     "defaultTradeMode": "both"
   }
 }
@@ -87,7 +88,7 @@ node server.js
 ```
 
 5. 访问控制面板
-打开浏览器，访问 `http://localhost:2025`
+打开浏览器，访问 `http://localhost:3000`
 
 ## 使用说明
 

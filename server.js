@@ -93,6 +93,68 @@ app.get('/api/status', (req, res) => {
   }
 });
 
+// 保存设置
+app.post('/api/settings', (req, res) => {
+  try {
+    const settings = req.body;
+    console.log('\n收到新的设置参数:');
+    console.log('------------------------');
+    console.log('交易金额:', settings.amount, 'USDT');
+    console.log('杠杆倍数:', settings.leverage, 'x');
+    console.log('止盈比例:', settings.takeProfitPercentage, '%');
+    console.log('止损比例:', settings.stopLossPercentage, '%');
+    console.log('交易模式:', settings.tradeMode);
+    console.log('------------------------\n');
+
+    fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify(settings, null, 2));
+    console.log('设置已保存到文件');
+    res.json({ success: true, message: '设置已保存' });
+  } catch (error) {
+    console.error('保存设置失败:', error);
+    res.status(500).json({ success: false, message: '保存设置失败' });
+  }
+});
+
+// 获取设置
+app.get('/api/settings', (req, res) => {
+  try {
+    const settingsPath = path.join(dataDir, 'settings.json');
+    if (!fs.existsSync(settingsPath)) {
+      const defaultSettings = {
+        amount: 40,
+        leverage: 25,
+        takeProfitPercentage: 5,
+        stopLossPercentage: 5,
+        tradeMode: 'both'
+      };
+      fs.writeFileSync(settingsPath, JSON.stringify(defaultSettings, null, 2));
+      console.log('\n创建默认设置:');
+      console.log('------------------------');
+      console.log('交易金额:', defaultSettings.amount, 'USDT');
+      console.log('杠杆倍数:', defaultSettings.leverage, 'x');
+      console.log('止盈比例:', defaultSettings.takeProfitPercentage, '%');
+      console.log('止损比例:', defaultSettings.stopLossPercentage, '%');
+      console.log('交易模式:', defaultSettings.tradeMode);
+      console.log('------------------------\n');
+      res.json(defaultSettings);
+    } else {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      console.log('\n读取当前设置:');
+      console.log('------------------------');
+      console.log('交易金额:', settings.amount, 'USDT');
+      console.log('杠杆倍数:', settings.leverage, 'x');
+      console.log('止盈比例:', settings.takeProfitPercentage, '%');
+      console.log('止损比例:', settings.stopLossPercentage, '%');
+      console.log('交易模式:', settings.tradeMode);
+      console.log('------------------------\n');
+      res.json(settings);
+    }
+  } catch (error) {
+    console.error('获取设置失败:', error);
+    res.status(500).json({ success: false, message: '获取设置失败' });
+  }
+});
+
 // 平仓特定交易
 app.post('/api/close/:tradeId', async (req, res) => {
   try {

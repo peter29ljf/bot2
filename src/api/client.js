@@ -165,7 +165,7 @@ class BitgetClient {
       }
     }
     
-    // 根据Bitget最新文档，使用正确的API路径 - 与Python代码保持一致
+    // 根据Bitget最新文档，使用正确的API路径
     return this.sendRequest('POST', '/api/mix/v1/order/placeOrder', modifiedOrderData);
   }
   
@@ -200,74 +200,40 @@ class BitgetClient {
         return this.placeOrder(closeData);
       }
       
-      // 查找对应交易对和方向的持仓
-      const position = positionsResponse.data.find(
-        pos => pos.symbol === symbol && pos.holdSide === holdSide
+      // 找到对应的持仓
+      const position = positionsResponse.data.find(pos => 
+        pos.symbol === symbol && pos.holdSide === holdSide
       );
       
       if (!position) {
-        console.error(`未找到${symbol}的${holdSide}持仓`);
-        const formattedSymbol = symbol.includes('_UMCBL') ? symbol : symbol + '_UMCBL';
-        
-        const closeData = {
-          symbol: formattedSymbol,
-          marginCoin,
-          marginMode: 'crossed',
-          side: holdSide === 'long' ? 'close_long' : 'close_short',
-          posSide: holdSide,
-          orderType: 'market',
-          size: '100', // 使用一个较大的值尝试平掉所有
-          productType: 'umcbl'
-        };
-        
-        console.log('平仓请求数据 (未找到特定持仓):', closeData);
-        return this.placeOrder(closeData);
+        console.log('未找到对应持仓:', { symbol, holdSide });
+        return { success: false, message: '未找到对应持仓' };
       }
       
-      console.log('持仓信息:', position);
-      const availableSize = position.available || position.total || '100';
-      
-      // 使用可用的持仓数量进行平仓
-      const formattedSymbol = symbol.includes('_UMCBL') ? symbol : symbol + '_UMCBL';
-      
+      // 创建平仓订单
       const closeData = {
-        symbol: formattedSymbol,
+        symbol: position.symbol,
         marginCoin,
-        marginMode: 'crossed',
+        marginMode: position.marginMode,
         side: holdSide === 'long' ? 'close_long' : 'close_short',
         posSide: holdSide,
         orderType: 'market',
-        size: availableSize,
+        size: position.total,
         productType: 'umcbl'
       };
       
-      console.log('平仓请求数据 (找到持仓):', closeData);
+      console.log('平仓请求数据:', closeData);
       return this.placeOrder(closeData);
+      
     } catch (error) {
-      console.error('平仓准备失败:', error);
-      // 发生错误时，尝试使用固定值平仓
-      const formattedSymbol = symbol.includes('_UMCBL') ? symbol : symbol + '_UMCBL';
-      
-      const closeData = {
-        symbol: formattedSymbol,
-        marginCoin,
-        marginMode: 'crossed',
-        side: holdSide === 'long' ? 'close_long' : 'close_short',
-        posSide: holdSide,
-        orderType: 'market',
-        size: '100', // 使用一个较大的值尝试平掉所有
-        productType: 'umcbl'
-      };
-      
-      console.log('平仓请求数据 (发生错误):', closeData);
-      return this.placeOrder(closeData);
+      console.error('平仓操作失败:', error);
+      return { success: false, message: '平仓操作失败', error: error.message };
     }
   }
-
+  
   // 获取账户信息
   async getAccountInfo(productType = 'umcbl', marginCoin = 'USDT') {
-    console.log('获取账户信息...');
-    return this.sendRequest('GET', '/api/mix/v1/account/accounts', { productType, marginCoin });
+    return this.sendRequest('GET', '/api/mix/v1/account/account', { productType, marginCoin });
   }
 
   // 设置持仓模式
