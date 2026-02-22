@@ -1,0 +1,15 @@
+{
+  "trading_wallet": "0xYourTradingWalletAddress",
+  "target_wallet": "0xTargetWalletToFollow",
+  "percentage": 1.0,
+  "interval": 5,
+  "max_trades": 10,
+  "slippage_protection": 0.05,
+  "min_amount": 2.0,
+  "max_amount": 500.0,
+  "trade_mode": "buy",
+  "max_daily_loss": 200.0,
+  "trade_api_url": "http://your-trade-api/trade",
+  "web_host": "0.0.0.0",
+  "web_port": 8000
+}

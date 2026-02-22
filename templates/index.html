@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Trader V2</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 28px 32px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header .left h1 {
+            font-size: 2.2em;
+            margin-bottom: 4px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+        header .left p { color: #64748b; font-size: 0.95em; }
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 20px; border-radius: 24px; font-weight: 600; font-size: 0.9em;
+        }
+        .status-badge.running { background: #22c55e; color: #fff; }
+        .status-badge.stopped { background: #ef4444; color: #fff; }
+        .status-badge .dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #fff;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card {
+            background: #1e293b; padding: 20px; border-radius: 12px;
+            text-align: center; border: 1px solid #334155; transition: border-color 0.2s;
+        }
+        .stat-card:hover { border-color: #475569; }
+        .stat-value { font-size: 2.2em; font-weight: 700; color: #3b82f6; line-height: 1.2; }
+        .stat-label { font-size: 0.85em; color: #64748b; margin-top: 6px; }
+        .pos-summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 20px; }
+        .pos-summary-item { background: #0f172a; padding: 14px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
+        .pos-summary-value { font-size: 1.6em; font-weight: 700; line-height: 1.2; }
+        .pos-summary-label { font-size: 0.8em; color: #64748b; margin-top: 4px; }
+        .pos-table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+        .pos-table th {
+            text-align: left; padding: 10px 8px; color: #64748b; font-weight: 500;
+            border-bottom: 1px solid #334155; font-size: 0.85em; white-space: nowrap;
+        }
+        .pos-table td { padding: 12px 8px; border-bottom: 1px solid rgba(51,65,85,0.5); color: #cbd5e1; }
+        .pos-table tr:hover td { background: rgba(15,23,42,0.5); }
+        .pos-table .market-name { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pos-list-wrap { max-height: 320px; overflow-y: auto; }
+        .pos-list-wrap::-webkit-scrollbar { width: 6px; }
+        .pos-list-wrap::-webkit-scrollbar-track { background: transparent; }
+        .pos-list-wrap::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+        .card { background: #1e293b; border-radius: 12px; padding: 24px; border: 1px solid #334155; }
+        .card h2 { font-size: 1.15em; color: #94a3b8; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; color: #94a3b8; font-size: 0.88em; font-weight: 500; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 10px 12px; border: 1px solid #475569; border-radius: 8px;
+            background: #0f172a; color: #e2e8f0; font-size: 14px; transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+        .btn {
+            padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;
+            font-size: 14px; font-weight: 600; transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .btn:active { transform: translateY(0); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-start { background: #3b82f6; color: #fff; }
+        .btn-start:hover:not(:disabled) { background: #2563eb; }
+        .btn-stop { background: #ef4444; color: #fff; }
+        .btn-stop:hover:not(:disabled) { background: #dc2626; }
+        .btn-save { background: #8b5cf6; color: #fff; }
+        .btn-save:hover { background: #7c3aed; }
+        .btn-clear { background: #f59e0b; color: #fff; }
+        .btn-clear:hover { background: #d97706; }
+        .text-green { color: #22c55e; }
+        .text-red { color: #ef4444; }
+        .trade-list { max-height: 420px; overflow-y: auto; }
+        .trade-list::-webkit-scrollbar { width: 6px; }
+        .trade-list::-webkit-scrollbar-track { background: transparent; }
+        .trade-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .trade-item {
+            background: #0f172a; padding: 14px 16px; margin-bottom: 8px;
+            border-radius: 8px; border-left: 4px solid #475569; transition: background 0.15s;
+        }
+        .trade-item:hover { background: #1a2536; }
+        .trade-item.success { border-left-color: #22c55e; }
+        .trade-item.failed { border-left-color: #ef4444; }
+        .trade-item.miss { border-left-color: #f59e0b; }
+        .trade-item.filtered { border-left-color: #64748b; }
+        .trade-title { font-weight: 600; margin-bottom: 6px; font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .trade-meta { display: flex; gap: 16px; font-size: 0.82em; color: #64748b; flex-wrap: wrap; align-items: center; }
+        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; font-size: 0.82em; font-weight: 600; }
+        .badge-success { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .badge-failed { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .badge-miss { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .badge-filtered { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .badge-pending { background: rgba(59,130,246,0.15); color: #3b82f6; }
+        .empty-state { text-align: center; color: #64748b; padding: 40px 20px; font-size: 0.95em; }
+        @media (max-width: 768px) {
+            .container { padding: 12px; }
+            header { flex-direction: column; gap: 12px; text-align: center; padding: 20px; }
+            header .left h1 { font-size: 1.6em; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .grid-2 { grid-template-columns: 1fr; }
+            .form-grid-3 { grid-template-columns: 1fr; }
+            .btn-row { flex-direction: column; }
+            .btn { justify-content: center; }
+            .pos-summary { grid-template-columns: 1fr; }
+            .pos-table { font-size: 0.82em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="left">
+                <h1>Polymarket Trader V2</h1>
+                <p>智能跟单交易系统</p>
+            </div>
+            <div class="status-badge stopped" id="status-badge">未运行</div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-label">成功跟单</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-pnl" style="color:#64748b">-</div>
+                <div class="stat-label">当日盈亏</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-uptime">-</div>
+                <div class="stat-label">运行时间</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h2>⚙️ 配置参数</h2>
+                <form id="config-form">
+                    <div class="form-group">
+                        <label>交易钱包地址</label>
+                        <input type="text" id="trading-wallet" placeholder="0x..." />
+                    </div>
+                    <div class="form-group">
+                        <label>监控目标地址</label>
+                        <input type="text" id="target-wallet" placeholder="0x..." />
+                    </div>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label>跟单比例</label>
+                            <input type="number" id="percentage" step="0.1" min="0.1" max="1.0" value="1.0" />
+                        </div>
+                        <div class="form-group">
+                            <label>检查间隔（秒）</label>
+                            <input type="number" id="interval" min="1" max="60" value="5" />
+                        </div>
+                        <div class="form-group">
+                            <label>每日上限</label>
+                            <input type="number" id="max-trades" min="1" max="100" value="10" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>滑点保护（%）</label>
+                        <input type="number" id="slippage-protection" step="0.1" min="0" max="50" value="5" />
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>最小跟单金额（$）</label>
+                            <input type="number" id="min-amount" step="0.5" min="0" value="2" />
+                        </div>
+                        <div class="form-group">
+                            <label>最大跟单金额（$）</label>
+                            <input type="number" id="max-amount" step="10" min="1" value="500" />
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>跟单模式</label>
+                            <select id="trade-mode">
+                                <option value="buy">只跟买（BUY）</option>
+                                <option value="sell">只跟卖（SELL）</option>
+                                <option value="both">买卖都跟</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>日亏损上限（$）</label>
+                            <input type="number" id="max-daily-loss" step="10" min="10" value="200" />
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <button type="button" class="btn btn-start" id="start-btn">▶ 启动</button>
+                        <button type="button" class="btn btn-stop" id="stop-btn" disabled>⏹ 停止</button>
+                        <button type="submit" class="btn btn-save">💾 保存配置</button>
+                        <button type="button" class="btn btn-clear" id="clear-btn">🗑 清理数据</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>📊 持仓状况（每5分钟更新）</h2>
+                <div class="pos-summary">
+                    <div class="pos-summary-item">
+                        <div class="pos-summary-value" style="color:#3b82f6" id="pos-count">0</div>
+                        <div class="pos-summary-label">持仓数量</div>
+                    </div>
+                    <div class="pos-summary-item">
+                        <div class="pos-summary-value" id="pos-pnl" style="color:#64748b">-</div>
+                        <div class="pos-summary-label">总盈亏</div>
+                    </div>
+                    <div class="pos-summary-item">
+                        <div class="pos-summary-value" style="color:#f59e0b" id="pos-cost">$0</div>
+                        <div class="pos-summary-label">持仓总额</div>
+                    </div>
+                </div>
+                <div class="pos-list-wrap">
+                    <table class="pos-table">
+                        <thead>
+                            <tr><th>市场</th><th>方向</th><th>数量</th><th>成本价</th><th>现价</th><th>盈亏</th></tr>
+                        </thead>
+                        <tbody id="pos-tbody">
+                            <tr><td colspan="6" class="empty-state">暂无持仓</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 24px;">
+            <h2>📋 目标活动</h2>
+            <div class="trade-list" id="activity-list">
+                <div class="empty-state">暂无活动记录</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let startTime = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConfig();
+            refreshAll();
+            setInterval(refreshStatus, 5000);
+            setInterval(refreshTrades, 5000);
+            setInterval(refreshPnl, 300000);
+            refreshPnl();
+        });
+
+        document.getElementById('config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveConfig();
+        });
+        document.getElementById('start-btn').addEventListener('click', startTrader);
+        document.getElementById('stop-btn').addEventListener('click', stopTrader);
+        document.getElementById('clear-btn').addEventListener('click', async () => {
+            if (!confirm('确定清理所有 activity_list.json 和 position.json 数据？')) return;
+            try {
+                const r = await fetch('/api/clear', {method:'POST'});
+                const d = await r.json();
+                if (d.success) { alert('数据已清理'); refreshAll(); }
+                else alert('清理失败: ' + d.error);
+            } catch(e) { alert('清理失败'); }
+        });
+
+        async function loadConfig() {
+            try {
+                const r = await fetch('/api/config');
+                const c = await r.json();
+                document.getElementById('trading-wallet').value = c.trading_wallet || '';
+                document.getElementById('target-wallet').value = c.target_wallet || '';
+                document.getElementById('percentage').value = c.percentage || 1.0;
+                document.getElementById('interval').value = c.interval || 5;
+                document.getElementById('max-trades').value = c.max_trades || 10;
+                document.getElementById('slippage-protection').value = (c.slippage_protection || 0.05) * 100;
+                document.getElementById('min-amount').value = c.min_amount || 2;
+                document.getElementById('max-amount').value = c.max_amount || 500;
+                document.getElementById('trade-mode').value = c.trade_mode || 'buy';
+                document.getElementById('max-daily-loss').value = c.max_daily_loss || 200;
+            } catch(e) { console.error('加载配置失败:', e); }
+        }
+
+        async function saveConfig() {
+            const config = {
+                trading_wallet: document.getElementById('trading-wallet').value,
+                target_wallet: document.getElementById('target-wallet').value,
+                percentage: parseFloat(document.getElementById('percentage').value),
+                interval: parseInt(document.getElementById('interval').value),
+                max_trades: parseInt(document.getElementById('max-trades').value),
+                slippage_protection: parseFloat(document.getElementById('slippage-protection').value) / 100,
+                min_amount: parseFloat(document.getElementById('min-amount').value),
+                max_amount: parseFloat(document.getElementById('max-amount').value),
+                trade_mode: document.getElementById('trade-mode').value,
+                max_daily_loss: parseFloat(document.getElementById('max-daily-loss').value),
+            };
+            try {
+                const r = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(config)});
+                const d = await r.json();
+                alert(d.success ? '配置已保存' : '保存失败: ' + d.error);
+            } catch(e) { alert('保存失败'); }
+        }
+
+        async function startTrader() {
+            try {
+                const r = await fetch('/api/start', {method:'POST'});
+                const d = await r.json();
+                if (d.success) { alert('交易机器人已启动'); refreshStatus(); }
+                else alert('启动失败: ' + d.error);
+            } catch(e) { alert('启动失败'); }
+        }
+
+        async function stopTrader() {
+            try {
+                const r = await fetch('/api/stop', {method:'POST'});
+                const d = await r.json();
+                if (d.success) { alert('交易机器人已停止'); refreshStatus(); }
+                else alert('停止失败: ' + d.error);
+            } catch(e) { alert('停止失败'); }
+        }
+
+        async function refreshAll() {
+            await Promise.all([refreshStatus(), refreshTrades(), refreshPnl()]);
+        }
+
+        async function refreshStatus() {
+            try {
+                const r = await fetch('/api/status');
+                const d = await r.json();
+                isRunning = d.running;
+                document.getElementById('stat-total').textContent = d.stats.success || 0;
+                if (d.stats.start_time) {
+                    startTime = new Date(d.stats.start_time);
+                    updateUptime();
+                } else {
+                    document.getElementById('stat-uptime').textContent = '-';
+                }
+                updateButtons();
+            } catch(e) { console.error('刷新状态失败:', e); }
+        }
+
+        async function refreshTrades() {
+            try {
+                const r = await fetch('/api/trades?limit=50');
+                const activities = await r.json();
+                const container = document.getElementById('activity-list');
+                if (!activities.length) { container.innerHTML = '<div class="empty-state">暂无活动记录</div>'; return; }
+                container.innerHTML = activities.map(a => {
+                    const status = a.status || 'pending';
+                    const sideColor = a.side === 'BUY' ? '#22c55e' : '#ef4444';
+                    const badgeMap = {
+                        success: '<span class="badge badge-success">✓ 成功</span>',
+                        failed: '<span class="badge badge-failed">✗ 失败</span>',
+                        miss: '<span class="badge badge-miss">⚡ 错过</span>',
+                        filtered: `<span class="badge badge-filtered">— ${esc(a.reason || '不符合条件')}</span>`,
+                        pending: '<span class="badge badge-pending">⏳ 待处理</span>',
+                    };
+                    let meta = `<span>⏱ ${fmtTime(a.timestamp)}</span><span style="color:${sideColor}">${a.side||''}</span>`;
+                    meta += `<span>目标: ${(a.target_size||0).toFixed(2)} @ $${(a.target_price||0).toFixed(4)}</span>`;
+                    if (a.follow_size > 0) {
+                        meta += `<span>跟单: ${a.follow_size.toFixed(2)} @ $${(a.follow_price||0).toFixed(4)}</span>`;
+                        meta += `<span>💰 $${(a.follow_usdc||0).toFixed(2)}</span>`;
+                    }
+                    meta += badgeMap[status] || '';
+                    if (a.error_msg) meta += `<span style="color:#ef4444">${esc(a.error_msg)}</span>`;
+                    return `<div class="trade-item ${status}"><div class="trade-title">${esc(a.market_title||'')}</div><div class="trade-meta">${meta}</div></div>`;
+                }).join('');
+            } catch(e) { console.error('刷新活动失败:', e); }
+        }
+
+        async function refreshPnl() {
+            try {
+                const r = await fetch('/api/pnl');
+                const d = await r.json();
+                if (d.error) return;
+                document.getElementById('pos-count').textContent = d.open_positions || 0;
+                const pnl = d.total_pnl || 0;
+                const pnlEl = document.getElementById('pos-pnl');
+                pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+                pnlEl.className = 'pos-summary-value ' + (pnl >= 0 ? 'text-green' : 'text-red');
+                document.getElementById('pos-cost').textContent = '$' + (d.total_cost || 0).toFixed(2);
+                const statPnl = document.getElementById('stat-pnl');
+                statPnl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+                statPnl.style.color = pnl >= 0 ? '#22c55e' : '#ef4444';
+                const tbody = document.getElementById('pos-tbody');
+                if (!d.positions || !d.positions.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无持仓</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = d.positions.map(p => {
+                    const pnl = p.pnl || 0;
+                    const pnlClass = pnl >= 0 ? 'text-green' : 'text-red';
+                    const pnlStr = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+                    const cp = p.current_price != null ? '$' + p.current_price.toFixed(4) : '-';
+                    return `<tr>
+                        <td class="market-name" title="${esc(p.market_title||'')}">${esc((p.market_title||'').substring(0,28))}</td>
+                        <td><span style="color:${p.side==='BUY'?'#22c55e':'#ef4444'}">${p.side||''}</span></td>
+                        <td>${(p.size||0).toFixed(2)}</td>
+                        <td>$${(p.entry_price||0).toFixed(4)}</td>
+                        <td>${cp}</td>
+                        <td class="${pnlClass}">${pnlStr}</td>
+                    </tr>`;
+                }).join('');
+            } catch(e) { console.error('刷新盈亏失败:', e); }
+        }
+
+        function updateButtons() {
+            const badge = document.getElementById('status-badge');
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            if (isRunning) {
+                badge.textContent = ''; badge.className = 'status-badge running';
+                badge.innerHTML = '<span class="dot"></span> 运行中';
+                startBtn.disabled = true; stopBtn.disabled = false;
+            } else {
+                badge.textContent = '未运行'; badge.className = 'status-badge stopped';
+                startBtn.disabled = false; stopBtn.disabled = true;
+            }
+        }
+
+        function updateUptime() {
+            if (!startTime || !isRunning) { document.getElementById('stat-uptime').textContent = '-'; return; }
+            const diff = Math.floor((new Date() - startTime) / 1000);
+            const h = Math.floor(diff / 3600);
+            const m = Math.floor((diff % 3600) / 60);
+            document.getElementById('stat-uptime').textContent = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        }
+        setInterval(updateUptime, 30000);
+
+        function fmtTime(ts) {
+            if (!ts) return '-';
+            const diff = Math.floor((Date.now()/1000) - ts);
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff/60) + '分钟前';
+            if (diff < 86400) return Math.floor(diff/3600) + '小时前';
+            return new Date(ts*1000).toLocaleDateString();
+        }
+
+        function esc(t) {
+            const d = document.createElement('div');
+            d.textContent = t || '';
+            return d.innerHTML;
+        }
+    </script>
+</body>
+</html>

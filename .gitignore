@@ -1,0 +1,25 @@
+# 配置（含敏感信息）
+data/config.json
+
+# 运行时数据（可选提交空结构）
+data/activity_list.json
+data/position.json
+
+# 日志
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
