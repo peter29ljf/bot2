@@ -12,6 +12,7 @@ from src.config import Config
 logger = logging.getLogger(__name__)
 
 ACTIVITY_API = "https://data-api.polymarket.com/activity"
+DATA_POSITIONS_API = "https://data-api.polymarket.com/positions"
 BOOK_API = "https://clob.polymarket.com/book"
 MIDPOINT_API = "https://clob.polymarket.com/midpoint"
 
@@ -91,6 +92,29 @@ class APIClient:
             except (ValueError, TypeError) as e:
                 logger.warning(f"解析活动失败: {e}")
         return activities
+
+    # ========== 1.5 Data API - Positions (结算判断) ==========
+
+    async def get_positions(self, wallet: str) -> list[dict]:
+        """
+        获取钱包持仓信息（Data API）。
+        返回对象通常包含: asset(token_id), curPrice, redeemable, title, outcome 等字段。
+        """
+        if not wallet:
+            return []
+
+        response = await self._request(
+            "GET",
+            DATA_POSITIONS_API,
+            params={"user": wallet.lower()},
+        )
+        if not response:
+            return []
+        try:
+            data = response.json()
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
 
     # ========== 2. Order Book API (滑点检查) ==========
 

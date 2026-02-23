@@ -141,6 +141,16 @@ class WebApp:
 
             async def calc_pnl():
                 async with APIClient(self.config) as api:
+                    chain_positions = await api.get_positions(self.config.trading_wallet)
+                    chain_by_asset = {}
+                    for p in chain_positions or []:
+                        try:
+                            asset = str(p.get("asset", ""))
+                        except Exception:
+                            asset = ""
+                        if asset:
+                            chain_by_asset[asset] = p
+
                     total_pnl = 0.0
                     total_cost = 0.0
                     enriched = []
@@ -149,10 +159,37 @@ class WebApp:
                         size = pos.get("size", 0)
                         entry_usdc = pos.get("entry_usdc", 0)
                         total_cost += entry_usdc
-                        current_price = await api.get_token_price(pos.get("token_id", ""))
                         pnl = 0.0
-                        if current_price and entry_price:
-                            pnl = (current_price - entry_price) * size
+
+                        token_id = str(pos.get("token_id", "") or "")
+                        chain_pos = chain_by_asset.get(token_id)
+
+                        resolved = bool(chain_pos and chain_pos.get("redeemable") is True)
+                        cur_price = None
+                        if chain_pos is not None and chain_pos.get("curPrice") is not None:
+                            try:
+                                cur_price = float(chain_pos.get("curPrice"))
+                            except (TypeError, ValueError):
+                                cur_price = None
+
+                        current_price = None
+                        if resolved and cur_price is not None:
+                            # 已结算：赢=每枚 $1；输=每枚 $0
+                            if cur_price >= 0.99:
+                                current_price = 1.0
+                                pnl = float(size) - float(entry_usdc)
+                            elif cur_price <= 0.01:
+                                current_price = 0.0
+                                pnl = -float(entry_usdc)
+                            else:
+                                # 理论上已结算应为 0/1，若出现异常值则回退到未结算逻辑
+                                resolved = False
+
+                        if not resolved:
+                            current_price = await api.get_token_price(token_id)
+                            if current_price and entry_price:
+                                pnl = (current_price - entry_price) * size
+
                         total_pnl += pnl
                         enriched.append({
                             **pos,
